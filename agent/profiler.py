@@ -244,7 +244,7 @@ def profile_dataframe(df: pd.DataFrame) -> dict:
             # Convert to plain Python floats
             correlation_matrix = {
                 col: {
-                    other: round(_to_python(val), 4)
+                    other: round(v, 4) if (v := _to_python(val)) is not None else None
                     for other, val in row.items()
                 }
                 for col, row in corr.to_dict().items()

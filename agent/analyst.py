@@ -290,6 +290,118 @@ def generate_narrative(profile: dict, insights: list[dict]) -> str:
     return call_claude(prompt, max_tokens=512)
 
 
+def build_data_system_prompt(profile: dict, insights: list[dict]) -> str:
+    """Build a rich system prompt giving Claude full context of the uploaded dataset.
+
+    Args:
+        profile: Profile dict from profiler.
+        insights: Insights list from generate_insights.
+
+    Returns:
+        System prompt string.
+    """
+    shape = profile.get("shape", {})
+    numeric_cols = profile.get("numeric_columns", [])
+    categorical_cols = profile.get("categorical_columns", [])
+    datetime_cols = profile.get("datetime_columns", [])
+    high_null = profile.get("high_null_columns", [])
+    duplicates = profile.get("duplicate_rows", 0)
+
+    # Build concise column stats summary
+    col_lines = []
+    for col, info in profile.get("columns", {}).items():
+        stats = info.get("stats", {})
+        col_type = info.get("col_type", "")
+        null_pct = info.get("null_pct", 0)
+        line = f"  - {col} ({col_type}"
+        if null_pct > 0:
+            line += f", {null_pct*100:.0f}% null"
+        if col_type == "numeric" and stats:
+            line += f", min={stats.get('min')}, max={stats.get('max')}, mean={stats.get('mean')}"
+        elif col_type == "categorical" and stats:
+            top = list(stats.get("top_5_values", {}).keys())[:3]
+            line += f", top values: {top}"
+        elif col_type == "datetime" and stats:
+            line += f", range: {stats.get('min_date')} → {stats.get('max_date')}"
+        line += ")"
+        col_lines.append(line)
+
+    insight_text = "\n".join(
+        f"  {i+1}. {item['title']}: {item['insight']}"
+        for i, item in enumerate(insights)
+    )
+
+    return f"""You are an expert business data analyst and strategic advisor.
+
+The user has uploaded a dataset with the following profile:
+- Shape: {shape.get('rows', '?'):,} rows × {shape.get('cols', '?')} columns
+- Duplicate rows: {duplicates}
+- High-null columns: {high_null or 'none'}
+- Numeric columns: {numeric_cols}
+- Categorical columns: {categorical_cols}
+- Datetime columns: {datetime_cols}
+
+Column details:
+{chr(10).join(col_lines)}
+
+Key insights already discovered from this data:
+{insight_text}
+
+Your role:
+- Answer ANY question the user asks — business strategy, growth opportunities, trends, anomalies, forecasts, recommendations — always grounding your answer in the actual data above.
+- When you make a claim, reference specific columns, values, or patterns from the dataset.
+- If a question cannot be answered from the data, say so clearly and suggest what additional data would help.
+- Be concise, actionable, and specific. Avoid generic advice not tied to the data.
+- Format responses with bullet points or short paragraphs for readability."""
+
+
+def chat_with_data(
+    question: str,
+    profile: dict,
+    insights: list[dict],
+    history: list[dict],
+) -> str:
+    """Answer a business question grounded in the uploaded dataset.
+
+    Supports multi-turn conversation via the history list.
+
+    Args:
+        question: The user's latest question.
+        profile: Data profile dict.
+        insights: Previously generated insights.
+        history: List of prior turns: [{"role": "user"|"assistant", "content": str}]
+
+    Returns:
+        Assistant response string.
+    """
+    system_prompt = build_data_system_prompt(profile, insights)
+
+    # Build messages: history + new question
+    messages = list(history) + [{"role": "user", "content": question}]
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY environment variable is not set.")
+
+    base_url = os.getenv("ANTHROPIC_BASE_URL", "https://api.blackbox.ai")
+    model = _get_model()
+
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    full_messages = [{"role": "system", "content": system_prompt}] + messages
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=full_messages,
+            max_tokens=1024,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as exc:
+        raise AnalystError(f"Chat failed: {exc}") from exc
+
+
 class DataAnalyst:
     """Convenience class wrapping insight and narrative generation."""
 

@@ -173,7 +173,7 @@ def _render_single_file_analysis(
     """Render the full analysis UI for one file inside a Streamlit tab/expander."""
     import pandas as pd
     from agent.profiler import DataProfiler
-    from agent.analyst import DataAnalyst
+    from agent.analyst import DataAnalyst, chat_with_data
     from agent.visualizer import DataVisualizer
     from agent.sql_agent import SQLAgent
 
@@ -234,24 +234,77 @@ def _render_single_file_analysis(
     else:
         st.info("No charts were generated for this dataset.")
 
-    # NL→SQL
-    st.subheader("Ask a Question (NL→SQL)")
-    # Use file_label in widget keys to avoid duplicate key errors across tabs
-    q_key = f"question_{file_label}"
-    btn_key = f"run_{file_label}"
-    question = st.text_input(
-        "Ask something about your data (e.g. 'Total revenue per region?')",
-        key=q_key,
+    # ── Business Advisor Chat ─────────────────────────────────────────────
+    st.subheader("💬 Ask Your Data Analyst")
+    st.caption(
+        "Ask any business question — growth strategies, trends, anomalies, "
+        "forecasts, or 'what should I focus on?' — grounded in your data."
     )
-    if st.button("Run Query", key=btn_key) and question:
-        with st.spinner("Generating SQL and running query…"):
-            result = SQLAgent(file_path).ask(question)
-        if result["error"]:
-            st.error(f"Error: {result['error']}")
-        else:
-            st.code(result["sql_query"], language="sql")
-            st.write(f"Results ({result['row_count']} rows):")
-            st.dataframe(result["results"], use_container_width=True)
+
+    from agent.analyst import chat_with_data
+
+    # Session state key per file so each tab has its own history
+    history_key = f"chat_history_{file_label}"
+    if history_key not in st.session_state:
+        st.session_state[history_key] = []
+
+    history: list[dict] = st.session_state[history_key]
+
+    # Render existing conversation
+    for msg in history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Chat input
+    user_input = st.chat_input(
+        "Ask anything about your data… e.g. 'How can I grow revenue?' or 'Which product should I focus on?'",
+        key=f"chat_input_{file_label}",
+    )
+
+    if user_input:
+        # Show user message immediately
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        history.append({"role": "user", "content": user_input})
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking…"):
+                try:
+                    answer = chat_with_data(
+                        question=user_input,
+                        profile=profile,
+                        insights=analysis["insights"],
+                        history=history[:-1],  # exclude the just-added user msg
+                    )
+                except Exception as exc:
+                    answer = f"Error: {exc}"
+            st.markdown(answer)
+
+        history.append({"role": "assistant", "content": answer})
+        st.session_state[history_key] = history
+
+    # Clear chat button
+    if history and st.button("Clear chat", key=f"clear_{file_label}"):
+        st.session_state[history_key] = []
+        st.rerun()
+
+    # ── NL→SQL (collapsed) ────────────────────────────────────────────────
+    with st.expander("🔍 Run a SQL Query directly"):
+        q_key = f"question_{file_label}"
+        btn_key = f"run_{file_label}"
+        question = st.text_input(
+            "SQL question (e.g. 'Total revenue per region?')",
+            key=q_key,
+        )
+        if st.button("Run Query", key=btn_key) and question:
+            with st.spinner("Generating SQL and running query…"):
+                result = SQLAgent(file_path).ask(question)
+            if result["error"]:
+                st.error(f"Error: {result['error']}")
+            else:
+                st.code(result["sql_query"], language="sql")
+                st.write(f"Results ({result['row_count']} rows):")
+                st.dataframe(result["results"], use_container_width=True)
 
 
 def run_streamlit() -> None:
@@ -266,7 +319,7 @@ def run_streamlit() -> None:
     st.title("📊 AI Data Analyst Agent")
     st.caption(
         "Upload one or more files (CSV, Excel, JSON, Parquet) to get automated "
-        "insights, charts, and NL→SQL queries."
+        "insights, charts, and a data-aware business advisor chat."
     )
 
     uploaded_files = st.file_uploader(
