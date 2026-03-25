@@ -322,6 +322,21 @@ def run_streamlit() -> None:
         "insights, charts, and a data-aware business advisor chat."
     )
 
+    # ── Password gate ─────────────────────────────────────────────────────
+    app_password = os.getenv("APP_PASSWORD")
+    if app_password:
+        if "authenticated" not in st.session_state:
+            st.session_state["authenticated"] = False
+        if not st.session_state["authenticated"]:
+            pwd = st.text_input("Enter password to access the app", type="password")
+            if st.button("Login"):
+                if pwd == app_password:
+                    st.session_state["authenticated"] = True
+                    st.rerun()
+                else:
+                    st.error("Incorrect password.")
+            st.stop()
+
     uploaded_files = st.file_uploader(
         "Upload your data files",
         type=STREAMLIT_TYPES,
