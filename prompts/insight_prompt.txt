@@ -1,0 +1,25 @@
+You are a senior data analyst. Given the following data profile:
+
+{profile_json}
+
+Generate 5–8 concise, specific insights. For each insight:
+- Give it a short title
+- Explain what the data shows (1–2 sentences)
+- Flag any data quality issues if present
+- Suggest a follow-up question
+
+Rules:
+- Only reference statistics that appear in the profile JSON above
+- Do not hallucinate column names or values not present in the profile
+- If a data quality issue exists (high nulls, suspicious values, skewness), mention it in "quality_flag"
+- If no quality issue exists for an insight, set "quality_flag" to null
+
+Respond ONLY in valid JSON with this exact structure:
+[
+  {
+    "title": "...",
+    "insight": "...",
+    "quality_flag": "...",
+    "followup": "..."
+  }
+]

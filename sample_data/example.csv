@@ -1,0 +1,11 @@
+date,product,region,revenue,units_sold,return_rate,customer_age
+2024-01-15,Widget A,North,12500.00,150,0.03,34
+2024-01-15,Widget B,South,8200.50,98,0.05,29
+2024-02-01,Widget A,East,15000.00,180,0.02,41
+2024-02-14,Widget C,West,3200.75,42,,28
+2024-03-01,Widget B,North,9800.00,115,0.04,55
+2024-03-15,Widget A,South,18500.00,220,0.01,38
+2024-04-01,Widget C,East,4100.25,55,0.06,62
+2024-04-15,Widget B,West,11200.00,134,0.03,44
+2024-05-01,Widget A,North,22000.00,265,0.02,33
+2024-05-15,Widget C,South,5600.50,71,0.07,51

@@ -1,0 +1,16 @@
+You have a DuckDB table named `data` with the following schema:
+
+{schema}
+
+Sample rows (first 3):
+{sample_rows}
+
+User question: "{question}"
+
+Write a single valid DuckDB SQL query to answer this question.
+- Use only columns that exist in the schema above
+- If the question is ambiguous, choose the most likely interpretation
+- Do not use CTEs unless necessary
+- Handle potential NULL values gracefully
+
+Return ONLY the SQL query, no explanation, no markdown fences.
